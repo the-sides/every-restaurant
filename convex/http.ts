@@ -574,8 +574,8 @@ const handleOptions = httpAction(async (ctx, request) => {
                  request.headers.get("origin") || 
                  request.headers.get("ORIGIN");
   
-  // Determine allowed origin - prioritize request origin if it's from an allowed domain
-  let allowedOrigin: string = "*"; // Start with wildcard, then narrow down
+  // Determine allowed origin - cannot use "*" with credentials
+  let allowedOrigin: string;
   
   if (origin) {
     // Allow any Vercel domain
@@ -590,34 +590,40 @@ const handleOptions = httpAction(async (ctx, request) => {
     else if (process.env.FRONTEND_URL && origin === process.env.FRONTEND_URL) {
       allowedOrigin = origin;
     }
-    // For now, allow the request origin to test
+    // Default to the request origin (for testing - in production you might want to restrict this)
     else {
       allowedOrigin = origin;
     }
   } else if (process.env.FRONTEND_URL) {
     allowedOrigin = process.env.FRONTEND_URL;
   } else {
+    // Default fallback
     allowedOrigin = "https://every-restaurant.vercel.app";
   }
   
-  // Log for debugging
-  console.log("OPTIONS preflight request", { 
+  // Log for debugging - check Convex logs to see if this is being called
+  console.log("[CORS] OPTIONS preflight request", { 
     origin, 
     allowedOrigin,
     url: request.url,
     method: request.method,
+    path: "/api/restaurants",
   });
   
   // Return CORS headers - MUST include Access-Control-Allow-Origin
+  const headers = {
+    "Access-Control-Allow-Origin": allowedOrigin,
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Credentials": "true",
+    "Access-Control-Max-Age": "86400",
+  };
+  
+  console.log("[CORS] Returning headers:", headers);
+  
   return new Response(null, {
     status: 204,
-    headers: {
-      "Access-Control-Allow-Origin": allowedOrigin,
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
-      "Access-Control-Allow-Credentials": "true",
-      "Access-Control-Max-Age": "86400",
-    },
+    headers,
   });
 });
 
