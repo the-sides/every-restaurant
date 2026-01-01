@@ -567,48 +567,65 @@ http.route({
   handler: paymentWebhook,
 });
 
+// Create a dedicated OPTIONS handler for CORS preflight
+const handleOptions = httpAction(async (ctx, request) => {
+  // Get the origin from the request (case-insensitive)
+  const origin = request.headers.get("Origin") || 
+                 request.headers.get("origin") || 
+                 request.headers.get("ORIGIN");
+  
+  // Determine allowed origin - prioritize request origin if it's from an allowed domain
+  let allowedOrigin: string = "*"; // Start with wildcard, then narrow down
+  
+  if (origin) {
+    // Allow any Vercel domain
+    if (origin.includes("vercel.app")) {
+      allowedOrigin = origin;
+    }
+    // Allow localhost for development
+    else if (origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:")) {
+      allowedOrigin = origin;
+    }
+    // If FRONTEND_URL is set and matches, use origin
+    else if (process.env.FRONTEND_URL && origin === process.env.FRONTEND_URL) {
+      allowedOrigin = origin;
+    }
+    // For now, allow the request origin to test
+    else {
+      allowedOrigin = origin;
+    }
+  } else if (process.env.FRONTEND_URL) {
+    allowedOrigin = process.env.FRONTEND_URL;
+  } else {
+    allowedOrigin = "https://every-restaurant.vercel.app";
+  }
+  
+  // Log for debugging
+  console.log("OPTIONS preflight request", { 
+    origin, 
+    allowedOrigin,
+    url: request.url,
+    method: request.method,
+  });
+  
+  // Return CORS headers - MUST include Access-Control-Allow-Origin
+  return new Response(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": allowedOrigin,
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Credentials": "true",
+      "Access-Control-Max-Age": "86400",
+    },
+  });
+});
+
 // Register OPTIONS before POST to ensure preflight requests are handled
 http.route({
   path: "/api/restaurants",
   method: "OPTIONS",
-  handler: httpAction(async (_, request) => {
-    // Always return CORS headers for OPTIONS requests
-    const origin = request.headers.get("Origin");
-    let allowedOrigin: string;
-    
-    if (origin) {
-      // Allow localhost for development
-      if (origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:")) {
-        allowedOrigin = origin;
-      }
-      // Allow Vercel deployments
-      else if (origin.includes("vercel.app")) {
-        allowedOrigin = origin;
-      }
-      // If FRONTEND_URL is set and matches, use origin
-      else if (process.env.FRONTEND_URL && origin === process.env.FRONTEND_URL) {
-        allowedOrigin = origin;
-      }
-      // Default to origin if it exists
-      else {
-        allowedOrigin = origin;
-      }
-    } else {
-      // No origin header - use FRONTEND_URL or default
-      allowedOrigin = process.env.FRONTEND_URL || "https://every-restaurant.vercel.app";
-    }
-    
-    return new Response(null, {
-      status: 204,
-      headers: new Headers({
-        "Access-Control-Allow-Origin": allowedOrigin,
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type",
-        "Access-Control-Allow-Credentials": "true",
-        "Access-Control-Max-Age": "86400",
-      }),
-    });
-  }),
+  handler: handleOptions,
 });
 
 http.route({
