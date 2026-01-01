@@ -40,4 +40,17 @@ export default defineSchema({
   })
     .index("type", ["type"])
     .index("polarEventId", ["polarEventId"]),
+  zipCodeSearches: defineTable({
+    zipCode: v.string(),
+    searchedAt: v.number(),
+  })
+    .index("by_zipCode", ["zipCode"]),
+  restaurants: defineTable({
+    zipCodeSearchId: v.id("zipCodeSearches"),
+    name: v.string(),
+    genre: v.string(),
+    priceLevel: v.optional(v.number()),
+    isOpen: v.optional(v.boolean()),
+  })
+    .index("by_zipCodeSearch", ["zipCodeSearchId"]),
 });

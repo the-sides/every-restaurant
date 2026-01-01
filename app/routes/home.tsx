@@ -1,125 +1,146 @@
-import { getAuth } from "@clerk/react-router/ssr.server";
-import { createClerkClient } from "@clerk/react-router/api.server";
-import { ConvexHttpClient } from "convex/browser";
-import ContentSection from "~/components/homepage/content";
-import Footer from "~/components/homepage/footer";
-import Integrations from "~/components/homepage/integrations";
-import Pricing from "~/components/homepage/pricing";
-import Team from "~/components/homepage/team";
-import { api } from "../../convex/_generated/api";
+import { useState } from "react";
+import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
+import { Badge } from "~/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/components/ui/table";
+import { searchRestaurantsByZip, type Restaurant } from "~/lib/restaurants";
 import type { Route } from "./+types/home";
 
 export function meta({}: Route.MetaArgs) {
-  const title = "React Starter Kit - Launch Your SAAS Quickly";
-  const description =
-    "This powerful starter kit is designed to help you launch your SAAS application quickly and efficiently.";
-  const keywords = "React, Starter Kit, SAAS, Launch, Quickly, Efficiently";
-  const siteUrl = "https://www.reactstarter.xyz/";
-  const imageUrl =
-    "https://jdj14ctwppwprnqu.public.blob.vercel-storage.com/rsk-image-FcUcfBMBgsjNLo99j3NhKV64GT2bQl.png";
-
   return [
-    { title },
+    { title: "Restaurant Finder" },
     {
       name: "description",
-      content: description,
+      content: "Find restaurants by zip code",
     },
-
-    // Open Graph / Facebook
-    { property: "og:type", content: "website" },
-    { property: "og:title", content: title },
-    { property: "og:description", content: description },
-    { property: "og:image", content: imageUrl },
-    { property: "og:image:width", content: "1200" },
-    { property: "og:image:height", content: "630" },
-    { property: "og:url", content: siteUrl },
-    { property: "og:site_name", content: "React Starter Kit" },
-    { property: "og:image", content: imageUrl },
-
-    // Twitter Card
-    { name: "twitter:card", content: "summary_large_image" },
-    { name: "twitter:title", content: title },
-    {
-      name: "twitter:description",
-      content: description,
-    },
-    { name: "twitter:image", content: imageUrl },
-    {
-      name: "keywords",
-      content: keywords,
-    },
-    { name: "author", content: "Ras Mic" },
-    { name: "favicon", content: imageUrl },
   ];
 }
 
-export async function loader(args: Route.LoaderArgs) {
-  const { userId, sessionId } = await getAuth(args);
+export default function Home() {
+  const [zipCode, setZipCode] = useState("");
+  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // In server-side loaders, use process.env (Vite env vars are available at build time)
-  const convexUrl = process.env.VITE_CONVEX_URL;
-  if (!convexUrl) {
-    throw new Error("VITE_CONVEX_URL is not configured. Make sure it's set in your environment variables.");
-  }
-
-  // Get Clerk session token for authenticated requests
-  let authToken: string | undefined;
-  if (sessionId && userId) {
-    try {
-      const clerkClient = createClerkClient({
-        secretKey: process.env.CLERK_SECRET_KEY,
-      });
-      authToken = await clerkClient.sessions.getToken(sessionId, {
-        template: "convex",
-      });
-    } catch (error) {
-      console.error("Failed to get Clerk session token:", error);
+  const handleSearch = async () => {
+    if (!zipCode.trim()) {
+      setError("Please enter a zip code");
+      return;
     }
-  }
 
-  // Create Convex HTTP clients - one with auth for authenticated queries,
-  // one without auth for public actions
-  const convexWithAuth = new ConvexHttpClient(convexUrl);
-  const convexPublic = new ConvexHttpClient(convexUrl);
+    setLoading(true);
+    setError(null);
+    setRestaurants([]);
 
-  // Set auth token if available (setAuth expects a function that returns a token)
-  if (authToken) {
-    convexWithAuth.setAuth(() => Promise.resolve(authToken!));
-  }
-
-  // Parallel data fetching to reduce waterfall
-  const [subscriptionData, plans] = await Promise.all([
-    userId && authToken
-      ? convexWithAuth
-          .query(api.subscriptions.checkUserSubscriptionStatus, { userId })
-          .catch((error) => {
-            console.error("Failed to fetch subscription data:", error);
-            return null;
-          })
-      : Promise.resolve(null),
-    convexPublic
-      .action(api.subscriptions.getAvailablePlans)
-      .catch((error) => {
-        console.error("Failed to fetch plans:", error);
-        return { items: [], pagination: null };
-      }),
-  ]);
-
-  return {
-    isSignedIn: !!userId,
-    hasActiveSubscription: subscriptionData?.hasActiveSubscription || false,
-    plans,
+    try {
+      const results = await searchRestaurantsByZip(zipCode.trim());
+      setRestaurants(results);
+      if (results.length === 0) {
+        setError("No restaurants found for this zip code");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to search restaurants");
+    } finally {
+      setLoading(false);
+    }
   };
-}
 
-export default function Home({ loaderData }: Route.ComponentProps) {
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      handleSearch();
+    }
+  };
+
+  const getPriceLevel = (priceLevel?: number): string => {
+    if (priceLevel === undefined || priceLevel === null) return "-";
+    return "$".repeat(priceLevel) || "-";
+  };
+
   return (
-    <>
-      <Integrations loaderData={loaderData} />
-      <ContentSection />
-      <Team />
-      <Pricing loaderData={loaderData} />
-      <Footer />
-    </>
+    <div className="min-h-screen bg-background">
+      <main className="container mx-auto px-4 py-12 max-w-4xl">
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold mb-2">Restaurant Finder</h1>
+          <p className="text-muted-foreground">
+            Search for restaurants by zip code
+          </p>
+        </div>
+
+        <div className="mb-8">
+          <div className="flex gap-2">
+            <Input
+              type="text"
+              placeholder="Enter zip code (e.g., 10001)"
+              value={zipCode}
+              onChange={(e) => setZipCode(e.target.value)}
+              onKeyPress={handleKeyPress}
+              className="flex-1"
+              disabled={loading}
+            />
+            <Button onClick={handleSearch} disabled={loading}>
+              {loading ? "Searching..." : "Search"}
+            </Button>
+          </div>
+          {error && (
+            <p className="mt-2 text-sm text-destructive">{error}</p>
+          )}
+        </div>
+
+        {restaurants.length > 0 && (
+          <div className="space-y-2">
+            <h2 className="text-sm font-medium text-muted-foreground">
+              Found {restaurants.length} restaurant{restaurants.length !== 1 ? "s" : ""}
+            </h2>
+            <Table>
+              <TableHeader>
+                <TableRow className="h-8">
+                  <TableHead className="h-8 px-2 text-xs font-medium">Name</TableHead>
+                  <TableHead className="h-8 px-2 text-xs font-medium">Genre</TableHead>
+                  <TableHead className="h-8 px-2 text-xs font-medium">Price</TableHead>
+                  <TableHead className="h-8 px-2 text-xs font-medium">Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {restaurants.map((restaurant, index) => (
+                  <TableRow key={index} className="h-6">
+                    <TableCell className="h-6 px-2 py-1 text-xs">
+                      {restaurant.name}
+                    </TableCell>
+                    <TableCell className="h-6 px-2 py-1">
+                      <Badge variant="secondary" className="text-xs py-0 px-1.5 h-4">
+                        {restaurant.genre}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="h-6 px-2 py-1 text-xs">
+                      {getPriceLevel(restaurant.priceLevel)}
+                    </TableCell>
+                    <TableCell className="h-6 px-2 py-1 text-xs">
+                      {restaurant.isOpen === undefined ? (
+                        <span className="text-muted-foreground">-</span>
+                      ) : restaurant.isOpen ? (
+                        <Badge variant="default" className="text-xs py-0 px-1.5 h-4 bg-green-600">
+                          Open
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary" className="text-xs py-0 px-1.5 h-4">
+                          Closed
+                        </Badge>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </main>
+    </div>
   );
 }

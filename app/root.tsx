@@ -7,25 +7,14 @@ import {
   ScrollRestoration,
 } from "react-router";
 
-import { ClerkProvider, useAuth } from "@clerk/react-router";
-import { rootAuthLoader } from "@clerk/react-router/ssr.server";
-import { ConvexReactClient } from "convex/react";
-import { ConvexProviderWithClerk } from "convex/react-clerk";
 import type { Route } from "./+types/root";
 import "./app.css";
 import { Analytics } from "@vercel/analytics/react";
 
-const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
-
-export async function loader(args: Route.LoaderArgs) {
-  return rootAuthLoader(args);
-}
 export const links: Route.LinksFunction = () => [
   // DNS prefetch for external services
   { rel: "dns-prefetch", href: "https://fonts.googleapis.com" },
   { rel: "dns-prefetch", href: "https://fonts.gstatic.com" },
-  { rel: "dns-prefetch", href: "https://api.convex.dev" },
-  { rel: "dns-prefetch", href: "https://clerk.dev" },
   
   // Preconnect to font services
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -42,12 +31,6 @@ export const links: Route.LinksFunction = () => [
   },
   
   // Preload critical assets
-  {
-    rel: "preload",
-    href: "/rsk.png",
-    as: "image",
-    type: "image/png",
-  },
   {
     rel: "preload",
     href: "/favicon.png", 
@@ -82,18 +65,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
   );
 }
 
-export default function App({ loaderData }: Route.ComponentProps) {
-  return (
-    <ClerkProvider
-      loaderData={loaderData}
-      signUpFallbackRedirectUrl="/"
-      signInFallbackRedirectUrl="/"
-    >
-      <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
-        <Outlet />
-      </ConvexProviderWithClerk>
-    </ClerkProvider>
-  );
+export default function App() {
+  return <Outlet />;
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
