@@ -24,7 +24,7 @@ export function meta({}: Route.MetaArgs) {
 }
 
 export default function Home() {
-  const [zipCode, setZipCode] = useState("");
+  const [zipCode, setZipCode] = useState("37408");
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
