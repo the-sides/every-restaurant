@@ -6,26 +6,33 @@ import { openai } from "@ai-sdk/openai";
 import { streamText } from "ai";
 
 // Helper function to get the allowed origin for CORS
+// CORS requires the response origin to match the request origin exactly
 function getAllowedOrigin(request: Request): string {
   const origin = request.headers.get("Origin");
   
-  // If FRONTEND_URL is explicitly set, use it
+  // Always prioritize the actual origin from the request if it's from an allowed domain
+  if (origin) {
+    // Allow localhost for development
+    if (origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:")) {
+      return origin;
+    }
+    // Allow Vercel deployments
+    if (origin.includes("vercel.app")) {
+      return origin;
+    }
+    // If FRONTEND_URL is set and matches the origin, use origin
+    if (process.env.FRONTEND_URL && origin === process.env.FRONTEND_URL) {
+      return origin;
+    }
+  }
+  
+  // If FRONTEND_URL is explicitly set and no origin or origin doesn't match, use FRONTEND_URL
   if (process.env.FRONTEND_URL) {
     return process.env.FRONTEND_URL;
   }
   
-  // Allow localhost for development
-  if (origin && (origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:"))) {
-    return origin;
-  }
-  
-  // Allow Vercel deployments
-  if (origin && origin.includes("vercel.app")) {
-    return origin;
-  }
-  
-  // Default fallback
-  return origin || process.env.FRONTEND_URL || "http://localhost:5173";
+  // Default fallback - use origin if available, otherwise localhost
+  return origin || "http://localhost:5173";
 }
 
 // Helper function to get CORS headers
@@ -560,32 +567,54 @@ http.route({
   handler: paymentWebhook,
 });
 
-http.route({
-  path: "/api/restaurants",
-  method: "POST",
-  handler: searchRestaurants,
-});
-
+// Register OPTIONS before POST to ensure preflight requests are handled
 http.route({
   path: "/api/restaurants",
   method: "OPTIONS",
   handler: httpAction(async (_, request) => {
-    const headers = request.headers;
-    if (
-      headers.get("Origin") !== null &&
-      headers.get("Access-Control-Request-Method") !== null &&
-      headers.get("Access-Control-Request-Headers") !== null
-    ) {
-      return new Response(null, {
-        headers: new Headers({
-          ...getCorsHeaders(request),
-          "Access-Control-Max-Age": "86400",
-        }),
-      });
+    // Always return CORS headers for OPTIONS requests
+    const origin = request.headers.get("Origin");
+    let allowedOrigin: string;
+    
+    if (origin) {
+      // Allow localhost for development
+      if (origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:")) {
+        allowedOrigin = origin;
+      }
+      // Allow Vercel deployments
+      else if (origin.includes("vercel.app")) {
+        allowedOrigin = origin;
+      }
+      // If FRONTEND_URL is set and matches, use origin
+      else if (process.env.FRONTEND_URL && origin === process.env.FRONTEND_URL) {
+        allowedOrigin = origin;
+      }
+      // Default to origin if it exists
+      else {
+        allowedOrigin = origin;
+      }
     } else {
-      return new Response();
+      // No origin header - use FRONTEND_URL or default
+      allowedOrigin = process.env.FRONTEND_URL || "https://every-restaurant.vercel.app";
     }
+    
+    return new Response(null, {
+      status: 204,
+      headers: new Headers({
+        "Access-Control-Allow-Origin": allowedOrigin,
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+        "Access-Control-Allow-Credentials": "true",
+        "Access-Control-Max-Age": "86400",
+      }),
+    });
   }),
+});
+
+http.route({
+  path: "/api/restaurants",
+  method: "POST",
+  handler: searchRestaurants,
 });
 
 // Log that routes are configured
