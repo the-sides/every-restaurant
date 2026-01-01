@@ -5,6 +5,40 @@ import { api } from "./_generated/api";
 import { openai } from "@ai-sdk/openai";
 import { streamText } from "ai";
 
+// Helper function to get the allowed origin for CORS
+function getAllowedOrigin(request: Request): string {
+  const origin = request.headers.get("Origin");
+  
+  // If FRONTEND_URL is explicitly set, use it
+  if (process.env.FRONTEND_URL) {
+    return process.env.FRONTEND_URL;
+  }
+  
+  // Allow localhost for development
+  if (origin && (origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:"))) {
+    return origin;
+  }
+  
+  // Allow Vercel deployments
+  if (origin && origin.includes("vercel.app")) {
+    return origin;
+  }
+  
+  // Default fallback
+  return origin || process.env.FRONTEND_URL || "http://localhost:5173";
+}
+
+// Helper function to get CORS headers
+function getCorsHeaders(request: Request): HeadersInit {
+  const allowedOrigin = getAllowedOrigin(request);
+  return {
+    "Access-Control-Allow-Origin": allowedOrigin,
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Credentials": "true",
+  };
+}
+
 // Helper function to calculate if a place is open now based on opening hours periods
 function calculateIsOpenNow(periods: any[]): boolean | undefined {
   if (!periods || periods.length === 0) {
@@ -210,7 +244,7 @@ export const searchRestaurants = httpAction(async (ctx, req) => {
         status: 400,
         headers: {
           "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": process.env.FRONTEND_URL || "http://localhost:5173",
+          ...getCorsHeaders(req),
         },
       }
     );
@@ -229,7 +263,7 @@ export const searchRestaurants = httpAction(async (ctx, req) => {
         status: 200,
         headers: {
           "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": process.env.FRONTEND_URL || "http://localhost:5173",
+          ...getCorsHeaders(req),
         },
       }
     );
@@ -243,7 +277,7 @@ export const searchRestaurants = httpAction(async (ctx, req) => {
         status: 500,
         headers: {
           "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": process.env.FRONTEND_URL || "http://localhost:5173",
+          ...getCorsHeaders(req),
         },
       }
     );
@@ -284,7 +318,7 @@ Please check: https://console.cloud.google.com/apis/library/places-backend.googl
           status: 500,
           headers: {
             "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": process.env.FRONTEND_URL || "http://localhost:5173",
+            ...getCorsHeaders(req),
           },
         }
       );
@@ -411,7 +445,7 @@ Please check: https://console.cloud.google.com/apis/library/places-backend.googl
         status: 200,
         headers: {
           "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": process.env.FRONTEND_URL || "http://localhost:5173",
+          ...getCorsHeaders(req),
         },
       }
     );
@@ -422,7 +456,7 @@ Please check: https://console.cloud.google.com/apis/library/places-backend.googl
         status: 500,
         headers: {
           "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": process.env.FRONTEND_URL || "http://localhost:5173",
+          ...getCorsHeaders(req),
         },
       }
     );
@@ -444,9 +478,10 @@ export const chat = httpAction(async (ctx, req) => {
   });
 
   // Respond with the stream
+  const allowedOrigin = getAllowedOrigin(req);
   return result.toDataStreamResponse({
     headers: {
-      "Access-Control-Allow-Origin": process.env.FRONTEND_URL || "http://localhost:5173",
+      "Access-Control-Allow-Origin": allowedOrigin,
       "Access-Control-Allow-Methods": "POST, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type, Authorization",
       "Access-Control-Allow-Credentials": "true",
@@ -475,9 +510,10 @@ http.route({
       headers.get("Access-Control-Request-Method") !== null &&
       headers.get("Access-Control-Request-Headers") !== null
     ) {
+      const allowedOrigin = getAllowedOrigin(request);
       return new Response(null, {
         headers: new Headers({
-          "Access-Control-Allow-Origin": process.env.FRONTEND_URL || "http://localhost:5173",
+          "Access-Control-Allow-Origin": allowedOrigin,
           "Access-Control-Allow-Methods": "POST",
           "Access-Control-Allow-Headers": "Content-Type, Authorization",
           "Access-Control-Allow-Credentials": "true",
@@ -502,9 +538,10 @@ http.route({
       headers.get("Access-Control-Request-Method") !== null &&
       headers.get("Access-Control-Request-Headers") !== null
     ) {
+      const allowedOrigin = getAllowedOrigin(request);
       return new Response(null, {
         headers: new Headers({
-          "Access-Control-Allow-Origin": process.env.FRONTEND_URL || "http://localhost:5173",
+          "Access-Control-Allow-Origin": allowedOrigin,
           "Access-Control-Allow-Methods": "POST",
           "Access-Control-Allow-Headers": "Content-Type, Authorization",
           "Access-Control-Allow-Credentials": "true",
@@ -541,10 +578,7 @@ http.route({
     ) {
       return new Response(null, {
         headers: new Headers({
-          "Access-Control-Allow-Origin": process.env.FRONTEND_URL || "http://localhost:5173",
-          "Access-Control-Allow-Methods": "POST",
-          "Access-Control-Allow-Headers": "Content-Type",
-          "Access-Control-Allow-Credentials": "true",
+          ...getCorsHeaders(request),
           "Access-Control-Max-Age": "86400",
         }),
       });
